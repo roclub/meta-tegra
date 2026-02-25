@@ -8,9 +8,10 @@ KERNEL_IMAGETYPE ?= "Image"
 
 KERNEL_ARGS ??= ""
 
-UBOOT_EXTLINUX_KERNEL_IMAGE ?= "/boot/${KERNEL_IMAGETYPE}"
+L4T_EXTLINUX_BASEDIR ?= "/boot"
+UBOOT_EXTLINUX_KERNEL_IMAGE ?= "${L4T_EXTLINUX_BASEDIR}/${KERNEL_IMAGETYPE}"
 UBOOT_EXTLINUX_KERNEL_ARGS ?= "${KERNEL_ARGS}"
-UBOOT_EXTLINUX_INITRD ?= "${@'/boot/initrd' if d.getVar('INITRAMFS_IMAGE') != '' and d.getVar('INITRAMFS_IMAGE_BUNDLE') != '1' else ''}"
+UBOOT_EXTLINUX_INITRD ?= "${@d.getVar('L4T_EXTLINUX_BASEDIR') + '/initrd' if d.getVar('INITRAMFS_IMAGE') != '' and d.getVar('INITRAMFS_IMAGE_BUNDLE') != '1' else ''}"
 
 NVIDIA_BOARD ?= "generic"
 
@@ -33,6 +34,8 @@ PREFERRED_PROVIDER_virtual/dtb ?= "nvidia-kernel-oot-dtb"
 PREFERRED_PROVIDER_virtual/bootloader ?= "edk2-firmware-tegra"
 OPTEE_MM_PROVIDER = "${@'tegra-uefi-prebuilt' if d.getVar('PREFERRED_PROVIDER_virtual/bootloader') == 'tegra-uefi-prebuilt' else 'standalone-mm-optee-tegra'}"
 PREFERRED_PROVIDER_standalone-mm-optee-tegra ?= "${OPTEE_MM_PROVIDER}"
+EDK2_FIRMWARE_TEGRA_MINIMAL = "${@'tegra-uefi-prebuilt' if d.getVar('PREFERRED_PROVIDER_virtual/bootloader') == 'tegra-uefi-prebuilt' else 'edk2-firmware-tegra-minimal'}"
+PREFERRED_PROVIDER_edk2-firmware-tegra-minimal = "${EDK2_FIRMWARE_TEGRA_MINIMAL}"
 LIBGLVND_PROVIDER = "${@'libglvnd' if 'openembedded-layer' in d.getVar('BBFILE_COLLECTIONS').split() else 'libglvnd-tegra'}"
 PREFERRED_PROVIDER_libglvnd = "${LIBGLVND_PROVIDER}"
 PREFERRED_PROVIDER_virtual/egl = "${LIBGLVND_PROVIDER}"

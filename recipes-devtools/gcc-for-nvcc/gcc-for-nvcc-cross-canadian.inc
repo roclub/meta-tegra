@@ -9,6 +9,7 @@ GCCMULTILIB = "--enable-multilib"
 
 require gcc-for-nvcc-configure-common.inc
 
+EXTRA_OECONF += "--with-plugin-ld=ld"
 EXTRA_OECONF_PATHS = "\
     --with-gxx-include-dir=/not/exist${target_includedir}/c++/${BINV} \
     --with-build-time-tools=${STAGING_DIR_NATIVE}${prefix_native}/${TARGET_SYS}/bin \
@@ -62,9 +63,6 @@ do_configure () {
 }
 
 do_compile () {
-	remove_sysroot_paths_from_configargs '/host'
-	remove_sysroot_paths_from_checksum_options '${STAGING_DIR_HOST}' '/host'
-
 	oe_runmake all-host configure-target-libgcc
 	(cd ${B}/${TARGET_SYS}/libgcc; oe_runmake enable-execute-stack.c unwind.h md-unwind-support.h sfp-machine.h gthr-default.h)
 }
@@ -98,6 +96,8 @@ EXEEXT = ""
 
 # Compute how to get from libexecdir to bindir in python (easier than shell)
 BINRELPATH = "${@os.path.relpath(d.expand("${bindir}"), d.expand("${libexecdir}/gcc/${TARGET_SYS}/${BINV}"))}"
+# linker plugin path
+LIBRELPATH = "${@os.path.relpath(d.expand("${libexecdir}/gcc/${TARGET_SYS}/${BINV}"), d.expand("${libdir}/bfd-plugins-${BINV}"))}"
 
 do_install () {
 	( cd ${B}/${TARGET_SYS}/libgcc; oe_runmake 'DESTDIR=${D}' install-unwind_h-forbuild install-unwind_h )
@@ -127,18 +127,13 @@ do_install () {
 	dest=${D}${libexecdir}/gcc/${TARGET_SYS}/${BINV}/
 	install -d $dest
 	suffix=${EXEEXT}
-	for t in ar as ld ld.bfd ld.gold nm objcopy objdump ranlib strip; do
-		if [ "$t" = "g77" -o "$t" = "gfortran" ] && [ ! -e ${D}${bindir}/${TARGET_PREFIX}$t$suffix ]; then
+	for t in ar as ld ld.bfd ld.gold nm objcopy objdump ranlib strip g77 gcc cpp; do
+		if [ "$t" = "g77" ] && [ ! -e ${D}${bindir}/${TARGET_PREFIX}$t$suffix ]; then
 			continue
 		fi
 
 		ln -sf ${BINRELPATH}/${TARGET_PREFIX}$t$suffix $dest$t$suffix
 	done
-	for t in gcc cpp; do
-	    ln -sf ${BINRELPATH}/${TARGET_PREFIX}$t-${BINV}$suffix $dest$t-${BINV}$suffix
-	done
-	t=real-ld
-	ln -sf ${BINRELPATH}/${TARGET_PREFIX}ld$suffix $dest$t$suffix
 
 	# libquadmath headers need to  be available in the gcc libexec dir
 	install -d ${D}${libdir}/gcc/${TARGET_SYS}/${BINV}/include/
@@ -171,8 +166,6 @@ do_install () {
 			done
 		done
 	done
-
-	cleanup_installed_include_fixed
 }
 
 ELFUTILS = "nativesdk-elfutils"
