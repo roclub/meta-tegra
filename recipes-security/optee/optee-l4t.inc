@@ -10,10 +10,20 @@ DEPENDS = "python3-pyelftools-native python3-cryptography-native standalone-mm-o
 # right path until this is relocated automatically.
 export OPENSSL_MODULES="${STAGING_LIBDIR_NATIVE}/ossl-modules"
 
+CVE_VERSION = "${@d.getVar('PV').split('-l4t-')[0]}"
+
 OPTEE_NV_PLATFORM ?= ""
 OPTEE_NV_PLATFORM:tegra234 = "t234"
 
 TA_DEV_KIT_DIR = "${STAGING_INCDIR}/optee/export-user_ta"
+
+OPTEE_ENABLE_FTPM ?= "0"
+
+FTPM_CFG = " \
+    CFG_CORE_TPM_EVENT_LOG=y \
+    CFG_REE_STATE=y \
+    CFG_JETSON_FTPM_HELPER_PTA=y \
+"
 
 # Common to all of the builds
 EXTRA_OEMAKE = "\

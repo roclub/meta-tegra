@@ -36,10 +36,42 @@ def tegra_bootcontrol_overlay_list(d, bup=False, separator=','):
             overlays.append('UefiUpdateSecurityKeys.dtbo')
     return separator.join(overlays)
 
+def tegra_signing_filechecksums(d):
+    files = []
+    if d.getVar('TEGRA_SIGNING_PKC'):
+        files.append('${TEGRA_SIGNING_PKC}')
+    if d.getVar('TEGRA_SIGNING_SBK'):
+        files.append('${TEGRA_SIGNING_SBK}')
+    if len(files) == 0:
+        return ''
+    return ' '.join([f + ':True' for f in files])
+
+def tegra_signing_args(d):
+    import os
+    import bb
+
+    args = ''
+    pkc = d.getVar('TEGRA_SIGNING_PKC')
+    if pkc:
+        if not os.path.exists(pkc):
+            bb.fatal("Signing file does not exist: %s" % pkc)
+        args += ' -u ${TEGRA_SIGNING_PKC}'
+    sbk = d.getVar('TEGRA_SIGNING_SBK')
+    if sbk:
+        if not os.path.exists(sbk):
+            bb.fatal("Signing file does not exist: %s" % sbk)
+        args += ' -v ${TEGRA_SIGNING_SBK}'
+    return args
+
 IMAGE_ROOTFS_SIZE ?= "${@tegra_default_rootfs_size(d)}"
 
 KERNEL_ARGS ??= ""
-TEGRA_SIGNING_ARGS ??= ""
+TEGRA_SIGNING_PKC ??= ""
+TEGRA_SIGNING_PKC[vardepvalue] = ""
+TEGRA_SIGNING_SBK ??= ""
+TEGRA_SIGNING_SBK[vardepvalue] = ""
+TEGRA_SIGNING_ARGS ??= "${@tegra_signing_args(d)}"
+TEGRA_SIGNING_FILECHECKSUMS ??= "${@tegra_signing_filechecksums(d)}"
 TEGRA_SIGNING_ENV ??= ""
 TEGRA_SIGNING_EXCLUDE_TOOLS ??= ""
 TEGRA_SIGNING_EXTRA_DEPS ??= ""
@@ -250,7 +282,7 @@ copy_dtbs() {
 copy_dtb_overlays() {
     local destination=$1
     local dtb dtbf extdtb
-    local extraoverlays="${TEGRA_DCE_OVERLAY} ${@d.getVar('OVERLAY_DTB_FILE').replace(',', ' ')}"
+    local extraoverlays="${TEGRA_FLASHVAR_DCE_OVERLAY} ${@d.getVar('OVERLAY_DTB_FILE').replace(',', ' ')}"
     shift
     if [ -n "${IMAGE_TEGRAFLASH_INITRD_FLASHER}" ]; then
         extraoverlays="$extraoverlays L4TConfiguration-rcmboot.dtbo"
@@ -289,8 +321,8 @@ tegraflash_populate_package() {
         cp "${IMAGE_TEGRAFLASH_DATA}" ./${DATAFILE}
         DATAARGS="--datafile ${DATAFILE}"
     fi
-    cp "${DEPLOY_DIR_IMAGE}/uefi_jetson.bin" ./uefi_jetson.bin
-    cp "${DEPLOY_DIR_IMAGE}/uefi_jetson_minimal.bin" ./uefi_jetson_minimal.bin
+    cp "${DEPLOY_DIR_IMAGE}/${TEGRA_FLASHVAR_UEFI_IMAGE}.bin" ./${TEGRA_FLASHVAR_UEFI_IMAGE}.bin
+    cp "${DEPLOY_DIR_IMAGE}/${TEGRA_FLASHVAR_RCM_UEFI_IMAGE}.bin" ./${TEGRA_FLASHVAR_RCM_UEFI_IMAGE}.bin
     cp "${DEPLOY_DIR_IMAGE}/tos-${MACHINE}.img" ./${TOSIMGFILENAME}
     for f in ${TEGRA_STAGED_BOOT_FIRMWARE}; do
         cp "${STAGING_DATADIR}/tegraflash/$f" .
@@ -398,6 +430,7 @@ END
     cd "$oldwd"
 }
 create_tegraflash_pkg[vardepsexclude] += "DATETIME"
+do_image_tegraflash_tar[file-checksums] += "${TEGRA_SIGNING_FILECHECKSUMS}"
 
 def tegraflash_bupgen_strip_cmd(d):
     images = d.getVar('TEGRA_BUPGEN_STRIP_IMG_NAMES').split()
@@ -448,6 +481,7 @@ do_image_tegraflash[depends] += "${TEGRAFLASH_PKG_DEPENDS} dtc-native:do_populat
                                  virtual/kernel:do_deploy \
                                  ${@'${INITRD_IMAGE}:do_image_complete' if d.getVar('INITRD_IMAGE') != '' else  ''} \
                                  ${@'${TEGRA_ESP_IMAGE}:do_image_complete' if d.getVar('TEGRA_ESP_IMAGE') != '' else  ''} \
-                                 virtual/bootloader:do_deploy edk2-firmware-tegra-minimal:do_deploy virtual/secure-os:do_deploy ${TEGRA_SIGNING_EXTRA_DEPS} ${DTB_EXTRA_DEPS} \
+                                 virtual/bootloader:do_deploy virtual/secure-os:do_deploy \
+				 ${TEGRA_RCM_EDK2_DEPENDS} ${TEGRA_SIGNING_EXTRA_DEPS} ${DTB_EXTRA_DEPS} \
                                  ${@'${TEGRAFLASH_INITRD_FLASH_IMAGE}:do_image_complete' if d.getVar('TEGRAFLASH_INITRD_FLASH_IMAGE') != '' else ''}"
 IMAGE_TYPEDEP:tegraflash += "${IMAGE_TEGRAFLASH_FS_TYPE}"

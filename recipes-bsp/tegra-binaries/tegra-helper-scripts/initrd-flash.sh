@@ -17,6 +17,7 @@ Options:
   --skip-bootloader     Skip boot partition programming
   --usb-instance        USB instance of Jetson device
   --erase-nvme          Erase NVME drive during flashing
+  --no-bmap             Do not use bmaptool for writing data
 
 Options passed through to flash helper:
   -u                    PKC key file for signing
@@ -48,9 +49,10 @@ sbk_keyfile=
 skip_bootloader=0
 early_final_status=0
 erase_nvme=0
+ignore_bmap=0
 check_usb_instance="${TEGRAFLASH_CHECK_USB_INSTANCE:-no}"
 
-ARGS=$(getopt -n $(basename "$0") -l "usb-instance:,help,skip-bootloader,erase-nvme" -o "u:v:h" -- "$@")
+ARGS=$(getopt -n $(basename "$0") -l "usb-instance:,help,skip-bootloader,erase-nvme,no-bmap" -o "u:v:h" -- "$@")
 if [ $? -ne 0 ]; then
     usage >&2
     exit 1
@@ -72,6 +74,10 @@ while true; do
 	    erase_nvme=1
 	    shift
 	    ;;
+        --no-bmap)
+            ignore_bmap=1
+            shift
+            ;;
 	-u)
 	    keyfile="$2"
 	    shift 2
@@ -353,6 +359,7 @@ copy_bootloader_files() {
 generate_flash_package() {
     local dev=$(wait_for_usb_storage "$session_id" "flashpkg" "$usb_instance")
     local exports
+    local extra_dir="$here/flashpkg-extra"
 
     if [ -z "$dev" ]; then
 	echo "ERR: could not locate USB storage device for sending flashing commands" >&2
@@ -373,6 +380,11 @@ generate_flash_package() {
 	echo "bootloader" >> "$mnt/flashpkg/conf/command_sequence"
 	mkdir "$mnt/flashpkg/bootloader"
 	cp bootloader_staging/* "$mnt/flashpkg/bootloader"
+    fi
+
+    if [ -d "$extra_dir" ]; then
+	# Allow host-side tooling to inject additional files into the flash package.
+	cp -a "$extra_dir/." "$mnt/flashpkg/flashpkg-extra"
     fi
 
     echo "extra-pre-wipe" >> "$mnt/flashpkg/conf/command_sequence"
@@ -401,6 +413,9 @@ write_to_device() {
     if [ -z "$dev" ]; then
 	echo "ERR: could not find $devname" >&2
 	return 1
+    fi
+    if [ $ignore_bmap -eq 1 ]; then
+        opts="$opts --no-bmap"
     fi
     if [ -e external-secureflash.xml ]; then
 	rewritefiles="external-secureflash.xml,$rewritefiles"
